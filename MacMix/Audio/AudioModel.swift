@@ -65,6 +65,8 @@ final class OutputAudioState {
     // Paired headphones advertising nearby that Core Audio does not list.
     var nearbyAccessories: [NearbyAudioAccessory] = []
     var discoveredAirPlayReceivers: [DiscoveredAirPlayReceiver] = []
+    var connectingAirPlayReceiverID: String?
+    var airPlayConnectionError: String?
     // Canonical (hex-only, uppercase) address of the accessory being connected.
     var connectingAccessoryAddress: String?
     // First-seen order of output rows. Headphones keep their place while they
@@ -453,6 +455,70 @@ final class AudioModel: NSObject {
         scheduleMixerReconcile(additionalTarget: app.snapshot, requestAuthorizationIfDenied: true)
     }
 
+    /// Connect an unlisted Bonjour receiver as the Mac's system-wide output.
+    /// A successful Accessibility press is not proof of a usable AirPlay route.
+    func connectAirPlayReceiverAsSystemOutput(
+        _ receiver: DiscoveredAirPlayReceiver,
+        panelCoordinator: MenuBarPanelCoordinator
+    ) {
+        guard outputState.connectingAirPlayReceiverID == nil else { return }
+        outputState.connectingAirPlayReceiverID = receiver.id
+        outputState.airPlayConnectionError = nil
+
+        airPlayConnectionTask?.cancel()
+        airPlayConnectionTask = Task { @MainActor [weak self, weak panelCoordinator] in
+            guard let self else { return }
+
+            let outcome = await ControlCenterAirPlayAutomation.connect(
+                to: receiver.name,
+                isTargetOutput: { [weak self] in
+                    guard let state = self?.outputState,
+                          let current = state.currentDevice,
+                          current.transportType == kAudioDeviceTransportTypeAirPlay else {
+                        return false
+                    }
+
+                    let selected = current.name.components(separatedBy: ", ")
+                    if selected.contains(where: {
+                        $0.localizedCaseInsensitiveCompare(receiver.name) == .orderedSame
+                    }) {
+                        return true
+                    }
+
+                    // Existing MacMix HAL data-source decoding handles
+                    // a shared AirPlay output with multiple receivers.
+                    return state.airPlayDestinations.contains {
+                        $0.isCurrent
+                            && $0.name.localizedCaseInsensitiveCompare(receiver.name) == .orderedSame
+                    }
+                },
+                isAirPlayDefault: { [weak self] in
+                    self?.outputState.currentDevice?.transportType == kAudioDeviceTransportTypeAirPlay
+                }
+            )
+
+            self.outputState.connectingAirPlayReceiverID = nil
+            self.refreshOutputState()
+
+            switch outcome {
+            case .connected(let panelClosed):
+                DiagnosticLog.shared.record("route", "control_center_airplay_connected",
+                    fields: ["panel_closed": String(panelClosed)])
+            case .permissionRequired:
+                self.outputState.airPlayConnectionError =
+                    "Allow MacMix in System Settings → Privacy & Security → Accessibility, then try again."
+            case .failed(let message):
+                self.outputState.airPlayConnectionError = message
+                DiagnosticLog.shared.record("route", "control_center_airplay_failed", level: "error",
+                    fields: ["reason": message])
+            }
+
+            // MacMix has a dedicated menu-bar visibility binding.
+            panelCoordinator?.restoreFullPanelAfterAirPlay()
+            self.airPlayConnectionTask = nil
+        }
+    }
+
     // The system picker connects the receiver, so its output appears later, if at all.
     func routeAirPlayReceiverOnceConnected(_ receiver: DiscoveredAirPlayReceiver, for app: AudioAppState) {
         guard outputRoutingStore.isFeatureActive else { return }
@@ -591,6 +657,7 @@ final class AudioModel: NSObject {
         let expiry: Date
     }
     private var pendingAirPlayRoute: PendingAirPlayRoute?
+    private var airPlayConnectionTask: Task<Void, Never>?
     private var nearbyConnectionApp: AudioAppState?
     private let bluetoothAccessoryConnector = BluetoothAccessoryConnector()
     private var nearbyConnectionTimeoutTask: Task<Void, Never>?
@@ -696,6 +763,7 @@ final class AudioModel: NSObject {
         bluetoothBatteryRefreshTask?.cancel()
         spatialAudioConfirmationTask?.cancel()
         nearbyConnectionTimeoutTask?.cancel()
+        airPlayConnectionTask?.cancel()
         displayVolumeController.deactivate()
         appAudioMixer.stopAll()
     }
