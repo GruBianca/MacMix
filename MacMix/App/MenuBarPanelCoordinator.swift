@@ -199,6 +199,32 @@ final class MenuBarPanelCoordinator {
         panel.setFrameOrigin(NSPoint(x: target, y: panel.frame.minY))
     }
 
+    /// Restore the full MacMix panel when the system Control Center picker
+    /// finishes. Use MenuBarExtraAccess's presentation binding instead of
+    /// synthetic clicks on MacMix's own menu bar item.
+    func restoreFullPanelAfterAirPlay() {
+        presentationTask?.cancel()
+        presentationTask = nil
+        dismissalCleanupTask?.cancel()
+        dismissalCleanupTask = nil
+        hideTask?.cancel()
+        hideTask = nil
+        isTemporary = false
+        mode = .fullPanel
+
+        if isPresented {
+            guard panelWindow?.isVisible != true else { return }
+            // A stale true binding does not reopen a dismissed window.
+            isPresented = false
+            Task { @MainActor [weak self] in
+                await Task.yield()
+                self?.isPresented = true
+            }
+        } else {
+            isPresented = true
+        }
+    }
+
     func dismissTemporaryPanel() {
         guard isTemporary else { return }
 
