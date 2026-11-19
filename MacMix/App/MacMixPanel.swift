@@ -54,7 +54,7 @@ struct MacMixPanel: View {
             Divider()
 
             if showsOutputInPanel {
-                OutputSection(audioModel: audioModel)
+                OutputSection(audioModel: audioModel, coordinator: coordinator)
             }
 
             if showsOutputInPanel && showsMixInPanel {
@@ -144,7 +144,7 @@ struct MenuBarPanelContent: View {
             case .systemVolume:
                 TemporarySystemVolumeContent(audioModel: audioModel)
             case .outputPanel:
-                TemporaryOutputPanelContent(audioModel: audioModel)
+                TemporaryOutputPanelContent(audioModel: audioModel, coordinator: coordinator)
             case .fullPanel:
                 MacMixPanel(
                     audioModel: audioModel,
@@ -255,6 +255,7 @@ private struct TemporaryAppVolumeContent: View {
 
 private struct TemporaryOutputPanelContent: View {
     let audioModel: AudioModel
+    let coordinator: MenuBarPanelCoordinator
     @AppStorage(PanelVisibilityPreference.showsMix) private var showsMixInPanel = true
 
     var body: some View {
@@ -263,7 +264,7 @@ private struct TemporaryOutputPanelContent: View {
 
             Divider()
 
-            OutputSection(audioModel: audioModel)
+            OutputSection(audioModel: audioModel, coordinator: coordinator)
 
             if showsMixInPanel {
                 Divider()
@@ -2140,6 +2141,7 @@ private struct NotificationSoundMuteButton: View {
 
 private struct OutputSection: View {
     let audioModel: AudioModel
+    let coordinator: MenuBarPanelCoordinator
     @AppStorage("MacMix.OutputSectionExpanded") private var isOutputExpanded = true
 
     var body: some View {
@@ -2152,9 +2154,24 @@ private struct OutputSection: View {
                     onSelect: audioModel.selectOutputDevice,
                     onSetListeningMode: audioModel.setListeningMode,
                     onSetSpatialAudioMode: audioModel.setSpatialAudioMode,
-                    onConnectNearby: audioModel.connectNearbyAccessory
+                    onConnectNearby: audioModel.connectNearbyAccessory,
+                    onConnectAirPlay: { receiver in
+                        audioModel.connectAirPlayReceiverAsSystemOutput(
+                            receiver, panelCoordinator: coordinator
+                        )
+                    }
                 )
             }
+        }
+        .alert("AirPlay", isPresented: Binding(
+            get: { audioModel.outputState.airPlayConnectionError != nil },
+            set: { if !$0 { audioModel.outputState.airPlayConnectionError = nil } }
+        )) {
+            Button("OK", role: .cancel) {
+                audioModel.outputState.airPlayConnectionError = nil
+            }
+        } message: {
+            Text(audioModel.outputState.airPlayConnectionError ?? "")
         }
     }
 }
@@ -2213,6 +2230,7 @@ private struct OutputDeviceGroup: View {
     let onSetListeningMode: (ListeningMode, AudioDevice) -> Void
     let onSetSpatialAudioMode: (SpatialAudioMode, AudioDevice) -> Void
     let onConnectNearby: (NearbyAudioAccessory) -> Void
+    let onConnectAirPlay: (DiscoveredAirPlayReceiver) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -2235,7 +2253,13 @@ private struct OutputDeviceGroup: View {
                     case let .nearby(accessory):
                         NearbyAccessoryRow(accessory: accessory, state: state, onConnect: onConnectNearby)
                     case let .airPlay(receiver):
-                        AirPlayReceiverRow(receiver: receiver, reservesAccessoryControlSpace: true)
+                        AirPlayReceiverRow(
+                            receiver: receiver,
+                            reservesAccessoryControlSpace: true,
+                            useControlCenter: true,
+                            isConnecting: state.connectingAirPlayReceiverID == receiver.id,
+                            onConnect: { onConnectAirPlay(receiver) }
+                        )
                     }
                 }
             }
@@ -2320,6 +2344,8 @@ struct NearbyAccessoryRow: View {
 struct AirPlayReceiverRow: View {
     let receiver: DiscoveredAirPlayReceiver
     var reservesAccessoryControlSpace = false
+    var useControlCenter = false
+    var isConnecting = false
     var onConnect: () -> Void = {}
     @State private var picker = AirPlayRoutePickerController()
     @Environment(\.hasStudioAccess) private var hasStudioAccess
@@ -2328,7 +2354,11 @@ struct AirPlayReceiverRow: View {
 
     var body: some View {
         Button {
-            picker.toggle()
+            if useControlCenter {
+                onConnect()
+            } else {
+                picker.toggle()
+            }
         } label: {
             HStack(spacing: 8) {
                 HStack(spacing: 12) {
@@ -2346,9 +2376,22 @@ struct AirPlayReceiverRow: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                    AirPlayRoutePicker(controller: picker, onPresent: onConnect)
-                        .frame(width: OutputRowMetrics.trailingColumnWidth, height: 28)
-                        .allowsHitTesting(false)
+                    Group {
+                        if useControlCenter {
+                            if isConnecting {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Image(systemName: "airplayaudio")
+                                    .font(.system(size: 17))
+                                    .foregroundStyle(.secondary)
+                                    .accessibilityHidden(true)
+                            }
+                        } else {
+                            AirPlayRoutePicker(controller: picker, onPresent: onConnect)
+                                .allowsHitTesting(false)
+                        }
+                    }
+                    .frame(width: OutputRowMetrics.trailingColumnWidth, height: 28)
                 }
 
                 if hasStudioAccess, showsAccessoryDetails, reservesAccessoryControlSpace {
@@ -2360,6 +2403,7 @@ struct AirPlayReceiverRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(isConnecting)
         .opacity(isEnabled ? 1 : 0.5)
         .help(Text("Connect with AirPlay", comment: "Tooltip of an AirPlay receiver row, which opens the system AirPlay picker."))
         .accessibilityLabel(Text(receiver.name))
