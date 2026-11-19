@@ -17,12 +17,20 @@ struct MacMixPanel: View {
     let audioModel: AudioModel
     let nowPlayingModel: NowPlayingModel
     let hasStudioAccess: Bool
+    let coordinator: MenuBarPanelCoordinator
     @AppStorage(PanelVisibilityPreference.showsNowPlaying) private var showsNowPlayingInPanel = true
     @AppStorage(PanelVisibilityPreference.showsOutput) private var showsOutputInPanel = true
     @AppStorage(PanelVisibilityPreference.showsMix) private var showsMixInPanel = true
     @AppStorage(PanelVisibilityPreference.showsInput) private var showsInputInPanel = true
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openWindow) private var openWindow
+
+    private var panelMaxHeight: CGFloat {
+        let screen = NSScreen.screens.first {
+            $0.frame.contains(NSEvent.mouseLocation)
+        } ?? NSScreen.main
+        return max(260, (screen?.visibleFrame.height ?? 800) - 70)
+    }
 
     var body: some View {
         let showsNowPlayingSection = hasStudioAccess
@@ -31,7 +39,8 @@ struct MacMixPanel: View {
         let showsSceneRow = hasStudioAccess && audioModel.sceneStore.showsInPanel
             && !audioModel.sceneStore.presets.isEmpty
 
-        VStack(spacing: 12) {
+        ScrollView(.vertical) {
+            VStack(spacing: 12) {
             if showsSceneRow {
                 ScenePanelSelectionRow(audio: audioModel, trailingEdgeExtension: 14, compact: true)
                     .padding(.bottom, -12)
@@ -99,12 +108,14 @@ struct MacMixPanel: View {
             .buttonStyle(.plain)
             .foregroundStyle(.primary)
             .padding(.vertical, 4)
+            }
+            .padding(.horizontal, 14)
+            .padding(.bottom, 12)
+            .padding(.top, showsSceneRow || showsNowPlayingSection ? 0 : 16)
         }
-        .padding(.horizontal, 14)
-        .padding(.bottom, 12)
-        .padding(.top, showsSceneRow || showsNowPlayingSection ? 0 : 16)
+        .scrollIndicators(.visible)
         .frame(width: 320)
-        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxHeight: panelMaxHeight)
     }
 }
 
@@ -138,7 +149,8 @@ struct MenuBarPanelContent: View {
                 MacMixPanel(
                     audioModel: audioModel,
                     nowPlayingModel: nowPlayingModel,
-                    hasStudioAccess: hasStudioAccess
+                    hasStudioAccess: hasStudioAccess,
+                    coordinator: coordinator
                 )
             }
             }
