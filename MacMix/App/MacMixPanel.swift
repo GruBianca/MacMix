@@ -2369,8 +2369,13 @@ struct AirPlayReceiverRow: View {
                             .font(.body.weight(.medium))
                             .lineLimit(1)
 
-                        Text("AirPlay, not connected", comment: "Status of an AirPlay receiver such as a HomePod that is on the network but not connected to this Mac.")
-                            .font(.subheadline)
+                        if useControlCenter && isConnecting {
+                            Text("Connecting…", comment: "AirPlay receiver connection is in progress.")
+                                .font(.subheadline)
+                        } else {
+                            Text("AirPlay, not connected", comment: "Status of an AirPlay receiver such as a HomePod that is on the network but not connected to this Mac.")
+                                .font(.subheadline)
+                        }
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
