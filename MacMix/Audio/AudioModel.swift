@@ -507,6 +507,9 @@ final class AudioModel: NSObject {
             case .permissionRequired:
                 self.outputState.airPlayConnectionError =
                     "Allow MacMix in System Settings → Privacy & Security → Accessibility, then try again."
+                // Keep System Settings in front so the user can grant access.
+                self.airPlayConnectionTask = nil
+                return
             case .failed(let message):
                 self.outputState.airPlayConnectionError = message
                 DiagnosticLog.shared.record("route", "control_center_airplay_failed", level: "error",
