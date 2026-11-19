@@ -41,73 +41,73 @@ struct MacMixPanel: View {
 
         ScrollView(.vertical) {
             VStack(spacing: 12) {
-            if showsSceneRow {
-                ScenePanelSelectionRow(audio: audioModel, trailingEdgeExtension: 14, compact: true)
-                    .padding(.bottom, -12)
-            }
-            if showsNowPlayingSection {
-                NowPlayingSection(model: nowPlayingModel, topContentInset: showsSceneRow ? 0 : 16)
-            }
-
-            SystemVolumeSection(audioModel: audioModel)
-
-            Divider()
-
-            if showsOutputInPanel {
-                OutputSection(audioModel: audioModel, coordinator: coordinator)
-            }
-
-            if showsOutputInPanel && showsMixInPanel {
-                Divider()
-            }
-
-            if showsMixInPanel {
-                MixSection(audioModel: audioModel)
-            }
-
-            if (showsOutputInPanel || showsMixInPanel) && showsInputInPanel {
-                Divider()
-            }
-
-            if showsInputInPanel {
-                InputSection(audioModel: audioModel)
-            }
-
-            if showsOutputInPanel || showsMixInPanel || showsInputInPanel {
-                Divider()
-            }
-
-            // Keep Quit clear of the full-width Open Main Window target for touch.
-            HStack(spacing: 16) {
-                Button {
-                    NSApp.setActivationPolicy(.regular)
-                    openWindow(id: "control-panel")
-                    NSApp.activate(ignoringOtherApps: true)
-                    dismiss()
-                } label: {
-                    Label("Open Main Window", systemImage: "macwindow")
-                        .font(.body.weight(.medium))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
+                if showsSceneRow {
+                    ScenePanelSelectionRow(audio: audioModel, trailingEdgeExtension: 14, compact: true)
+                        .padding(.bottom, -12)
+                }
+                if showsNowPlayingSection {
+                    NowPlayingSection(model: nowPlayingModel, topContentInset: showsSceneRow ? 0 : 16)
                 }
 
-                Button {
-                    NSApplication.shared.terminate(nil)
-                } label: {
-                    Label("Quit MacMix", systemImage: "power")
-                        .labelStyle(.iconOnly)
-                        .font(.body.weight(.medium))
-                        // Match the notification mute button's frame so both icons share a center line.
-                        .frame(width: 24, height: 24)
-                        .contentShape(Rectangle())
+                SystemVolumeSection(audioModel: audioModel)
+
+                Divider()
+
+                if showsOutputInPanel {
+                    OutputSection(audioModel: audioModel, coordinator: coordinator)
                 }
-                .buttonStyle(TouchTargetButtonStyle())
-                .fixedSize()
-                .help("Quit MacMix")
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.primary)
-            .padding(.vertical, 4)
+
+                if showsOutputInPanel && showsMixInPanel {
+                    Divider()
+                }
+
+                if showsMixInPanel {
+                    MixSection(audioModel: audioModel)
+                }
+
+                if (showsOutputInPanel || showsMixInPanel) && showsInputInPanel {
+                    Divider()
+                }
+
+                if showsInputInPanel {
+                    InputSection(audioModel: audioModel)
+                }
+
+                if showsOutputInPanel || showsMixInPanel || showsInputInPanel {
+                    Divider()
+                }
+
+                // Keep Quit clear of the full-width Open Main Window target for touch.
+                HStack(spacing: 16) {
+                    Button {
+                        NSApp.setActivationPolicy(.regular)
+                        openWindow(id: "control-panel")
+                        NSApp.activate(ignoringOtherApps: true)
+                        dismiss()
+                    } label: {
+                        Label("Open Main Window", systemImage: "macwindow")
+                            .font(.body.weight(.medium))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                    }
+
+                    Button {
+                        NSApplication.shared.terminate(nil)
+                    } label: {
+                        Label("Quit MacMix", systemImage: "power")
+                            .labelStyle(.iconOnly)
+                            .font(.body.weight(.medium))
+                            // Match the notification mute button's frame so both icons share a center line.
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(TouchTargetButtonStyle())
+                    .fixedSize()
+                    .help("Quit MacMix")
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.primary)
+                .padding(.vertical, 4)
             }
             .padding(.horizontal, 14)
             .padding(.bottom, 12)
@@ -2369,15 +2369,16 @@ struct AirPlayReceiverRow: View {
                             .font(.body.weight(.medium))
                             .lineLimit(1)
 
-                        if useControlCenter && isConnecting {
-                            Text("Connecting…", comment: "AirPlay receiver connection is in progress.")
-                                .font(.subheadline)
-                        } else {
-                            Text("AirPlay, not connected", comment: "Status of an AirPlay receiver such as a HomePod that is on the network but not connected to this Mac.")
-                                .font(.subheadline)
+                        Group {
+                            if useControlCenter && isConnecting {
+                                Text("Connecting…", comment: "AirPlay receiver connection is in progress.")
+                            } else {
+                                Text("AirPlay, not connected", comment: "Status of an AirPlay receiver such as a HomePod that is on the network but not connected to this Mac.")
+                            }
                         }
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
 
